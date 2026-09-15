@@ -1,0 +1,840 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Smart Snap — by CyberHayde</title>
+<meta name="description" content="Snap or upload up to 100 photos and get every word turned into one clean Word document, entirely on your device.">
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#17130F">
+<link rel="icon" type="image/x-icon" href="icons/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Smart Snap">
+
+<script src="assets/vendor/jszip.min.js"></script>
+<script src="assets/vendor/filesaver.min.js"></script>
+<script src="assets/vendor/tesseract/tesseract.min.js"></script>
+<style>
+  :root{
+    --paper: #17130F;
+    --paper-2: #211B15;
+    --panel-tint: rgba(255,255,255,0.035);
+    --ink: #EDE6D8;
+    --ink-soft: #A89A83;
+    --accent: #4FA9A2;
+    --accent-dark: #7FD1C7;
+    --accent-copper: #C99A3E;
+    --on-accent: #17130F;
+    --line: #3A3226;
+    --danger: #DA7367;
+    --font-serif: ui-serif, Georgia, 'Iowan Old Style', 'Palatino Linotype', serif;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: var(--paper);
+    background-image:
+      radial-gradient(circle at 100% 0%, rgba(79,169,162,0.05), transparent 45%),
+      radial-gradient(circle at 0% 100%, rgba(201,154,62,0.055), transparent 40%);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    min-height:100vh;
+    padding: 36px 20px 90px;
+  }
+  .wrap{max-width:640px;margin:0 auto;}
+
+  .brand{
+    display:flex;align-items:center;justify-content:space-between;margin-bottom:32px;
+  }
+  .brand-left{display:flex;align-items:center;gap:10px;}
+  .brand-mark{
+    width:30px;height:30px;border-radius:8px;flex-shrink:0;
+    box-shadow:0 2px 10px rgba(0,0,0,0.5), 0 0 0 1px rgba(237,230,216,0.06);
+  }
+  .brand-text{display:flex;flex-direction:column;line-height:1.15;}
+  .brand-name{font-family:var(--font-mono);font-size:0.88rem;font-weight:600;letter-spacing:0.01em;color:var(--ink);}
+  .brand-sub{font-family:var(--font-mono);font-size:0.66rem;color:var(--ink-soft);letter-spacing:0.03em;}
+  #installBtn{
+    display:none;
+    font-family:var(--font-mono);font-size:0.72rem;
+    background:var(--paper-2);color:var(--ink);border:1px solid var(--line);
+    border-radius:20px;padding:7px 14px;cursor:pointer;
+  }
+  #installBtn:hover{border-color:var(--accent);}
+
+  h1{
+    font-family:var(--font-serif);
+    font-weight:600;
+    font-size: 2.3rem;
+    line-height:1.14;
+    letter-spacing:-0.01em;
+    margin:0 0 12px;
+  }
+  .sub{
+    color:var(--ink-soft);
+    font-size:1.02rem;
+    line-height:1.55;
+    margin:0 0 14px;
+    max-width:54ch;
+  }
+  .badges{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:30px;}
+  .badge{
+    font-family:var(--font-mono);font-size:0.68rem;color:var(--accent-dark);
+    background:rgba(79,169,162,0.10);border:1px solid rgba(79,169,162,0.3);
+    padding:4px 10px;border-radius:20px;
+  }
+
+  .dropzone{
+    position:relative;overflow:hidden;
+    border:1.5px dashed var(--line);
+    border-radius:8px;
+    background: var(--panel-tint);
+    padding:36px 24px;
+    text-align:center;
+    cursor:pointer;
+    transition: border-color .15s ease, background .15s ease;
+  }
+  .dropzone.drag{
+    border-color: var(--accent-copper);
+    background: rgba(201,154,62,0.12);
+  }
+  .dropzone::before{
+    content:"";
+    position:absolute;left:8%;right:8%;height:2px;top:-10%;
+    background:linear-gradient(90deg, transparent, rgba(79,169,162,0.75), transparent);
+    animation: scanSweep 3.2s ease-in-out infinite;
+    opacity:0.85;
+  }
+  @keyframes scanSweep{
+    0%{top:6%;}
+    50%{top:92%;}
+    100%{top:6%;}
+  }
+  .dropzone p{margin:0;font-size:0.98rem;color:var(--ink-soft);position:relative;z-index:1;}
+  .dropzone strong{color:var(--ink);font-weight:600;}
+  .dz-icon{width:34px;height:34px;margin:0 auto 14px;display:block;color:var(--accent);position:relative;z-index:1;}
+  input[type=file]{display:none;}
+
+  .warn{font-size:0.83rem;color:var(--danger);margin-top:10px;}
+  .error-banner{
+    margin-top:16px;padding:12px 14px;border-radius:5px;
+    background:rgba(218,115,103,0.14);border:1px solid rgba(218,115,103,0.4);
+    color:var(--danger);font-size:0.88rem;line-height:1.5;display:none;
+  }
+
+  .count-row{
+    display:flex;justify-content:space-between;align-items:baseline;
+    margin:30px 0 10px;
+  }
+  .count-row .label{font-weight:600;font-size:0.95rem;}
+  .count-row .right{display:flex;align-items:baseline;gap:14px;}
+  .count-row .meta{font-family:var(--font-mono);font-size:0.8rem;color:var(--ink-soft);}
+  .clear-link{
+    font-size:0.8rem;color:var(--ink-soft);background:none;border:none;
+    cursor:pointer;text-decoration:underline;padding:0;
+  }
+  .clear-link:hover{color:var(--danger);}
+
+  ul.filelist{
+    list-style:none;margin:0;padding:0;border-top:1px solid var(--line);
+    max-height:420px;overflow-y:auto;
+  }
+  li.file-row{
+    display:flex;align-items:center;gap:12px;
+    padding:10px 2px;
+    border-bottom:1px solid var(--line);
+  }
+  .file-idx{
+    font-family:var(--font-mono);
+    font-size:0.75rem;
+    color:var(--ink-soft);
+    width:26px;flex-shrink:0;
+  }
+  .thumb{
+    width:36px;height:36px;border-radius:4px;object-fit:cover;
+    border:1px solid var(--line);flex-shrink:0;background:#fff;
+  }
+  .thumb.placeholder{display:flex;align-items:center;justify-content:center;color:var(--ink-soft);}
+  .thumb.placeholder svg{width:16px;height:16px;}
+  .file-info{flex:1;min-width:0;}
+  .file-name{
+    font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .file-status{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    color:var(--ink-soft);
+    margin-top:2px;
+  }
+  .file-status.done{color:var(--accent);}
+  .file-status.error{color:var(--danger);}
+  .bar-track{height:3px;background:var(--paper-2);border-radius:2px;margin-top:5px;overflow:hidden;}
+  .bar-fill{height:100%;width:0%;background:var(--accent);transition:width .25s ease;}
+  .bar-fill.indeterminate{width:40%;animation:slide 1.1s ease-in-out infinite;}
+  @keyframes slide{0%{margin-left:-40%;}100%{margin-left:100%;}}
+  .remove-btn{
+    background:none;border:none;cursor:pointer;color:var(--ink-soft);
+    font-size:1.05rem;line-height:1;padding:4px 6px;flex-shrink:0;
+  }
+  .remove-btn:hover{color:var(--danger);}
+
+  .actions{margin-top:28px;display:flex;flex-direction:column;gap:10px;}
+  button.primary{
+    font-family:var(--font-sans);
+    font-weight:600;font-size:0.98rem;
+    background: var(--accent-copper);
+    color:var(--on-accent);
+    border:none;border-radius:6px;
+    padding:14px 20px;
+    cursor:pointer;
+    transition: opacity .15s ease, transform .1s ease;
+  }
+  button.primary:active{transform:scale(0.99);}
+  button.primary:disabled{opacity:0.45;cursor:not-allowed;}
+  button.primary.download{background:var(--accent);}
+  button.secondary{
+    font-family:var(--font-sans);
+    font-weight:500;font-size:0.9rem;
+    background:none;color:var(--ink-soft);
+    border:1px solid var(--line);border-radius:6px;
+    padding:11px 20px;cursor:pointer;
+  }
+  button.secondary:hover{border-color:var(--ink-soft);color:var(--ink);}
+  .overall-track{height:4px;background:var(--paper-2);border-radius:2px;overflow:hidden;margin-top:2px;}
+  .overall-fill{height:100%;width:0%;background:var(--accent-copper);transition:width .2s ease;}
+  .overall-status{
+    font-family:var(--font-mono);
+    font-size:0.8rem;color:var(--ink-soft);
+    text-align:center;
+  }
+  .note{
+    margin-top:40px;padding-top:18px;border-top:1px solid var(--line);
+    font-size:0.83rem;color:var(--ink-soft);line-height:1.5;
+  }
+  .footer-credit{
+    margin-top:14px;font-family:var(--font-mono);font-size:0.72rem;color:var(--ink-soft);
+    text-align:center;
+  }
+
+  .secondary-add{
+    display:flex;align-items:center;justify-content:center;gap:6px;
+    margin-top:12px;font-size:0.85rem;color:var(--ink-soft);background:none;border:none;
+    cursor:pointer;padding:6px;width:100%;
+  }
+  .secondary-add:hover{color:var(--accent-dark);}
+  .secondary-add svg{width:15px;height:15px;}
+
+  .toggle-row{
+    display:flex;align-items:center;gap:8px;margin-top:16px;
+    font-size:0.85rem;color:var(--ink-soft);cursor:pointer;user-select:none;
+  }
+  .toggle-row input{accent-color:var(--accent);width:15px;height:15px;}
+
+  .reorder-col{display:flex;flex-direction:column;gap:1px;flex-shrink:0;}
+  .reorder-col button{
+    background:none;border:none;cursor:pointer;color:var(--ink-soft);
+    font-size:0.62rem;line-height:1;padding:2px 3px;
+  }
+  .reorder-col button:hover:not(:disabled){color:var(--accent-dark);}
+  .reorder-col button:disabled{opacity:0.25;cursor:default;}
+
+  .confidence{font-family:var(--font-mono);}
+  .confidence.low{color:var(--danger);}
+
+  #reviewSection{display:none;margin-top:34px;}
+  .review-head{margin-bottom:16px;}
+  .review-head h2{font-family:var(--font-serif);font-size:1.4rem;margin:0 0 6px;font-weight:600;}
+  .review-head p{margin:0;font-size:0.88rem;color:var(--ink-soft);line-height:1.5;}
+  .review-card{
+    border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px;
+    background:var(--panel-tint);
+  }
+  .review-card-top{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .review-thumb{width:40px;height:40px;border-radius:5px;object-fit:cover;border:1px solid var(--line);flex-shrink:0;}
+  .review-title{
+    flex:1;font-family:var(--font-sans);font-size:0.92rem;font-weight:600;color:var(--ink);
+    background:transparent;border:none;border-bottom:1px dashed transparent;padding:2px 0;min-width:0;
+  }
+  .review-title:hover,.review-title:focus{border-bottom-color:var(--line);outline:none;}
+  .review-meta{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+  .retry-btn{
+    background:none;border:1px solid var(--line);border-radius:5px;cursor:pointer;
+    font-size:0.7rem;color:var(--ink-soft);padding:4px 9px;font-family:var(--font-mono);
+  }
+  .retry-btn:hover{border-color:var(--accent);color:var(--accent-dark);}
+  .review-text{
+    width:100%;min-height:90px;resize:vertical;
+    font-family:var(--font-sans);font-size:0.87rem;line-height:1.5;color:var(--ink);
+    background:rgba(255,255,255,0.045);border:1px solid var(--line);border-radius:5px;padding:9px 10px;
+  }
+  .review-text:focus{outline:none;border-color:var(--accent);}
+  .review-actions{display:flex;gap:10px;margin-top:22px;flex-wrap:wrap;}
+  .review-actions button.primary, .review-actions button.secondary{flex:1;min-width:160px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <div class="brand-left">
+      <img class="brand-mark" src="icons/icon-192.png" alt="">
+      <div class="brand-text">
+        <span class="brand-name">Smart Snap</span>
+        <span class="brand-sub">by CyberHayde</span>
+      </div>
+    </div>
+    <button id="installBtn">Install app</button>
+  </div>
+
+  <h1>Turn scanned pages into one Word file</h1>
+  <p class="sub">Add up to 100 photos or scans. Each image's text is read locally on your device and dropped into a single .docx, in the order you add them.</p>
+  <div class="badges">
+    <span class="badge">Runs on-device</span>
+    <span class="badge">Works offline</span>
+    <span class="badge">Up to 100 images</span>
+  </div>
+
+  <div class="dropzone" id="dropzone">
+    <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4">
+      <path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3M8 9l4-4 4 4M12 5v11" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <p><strong>Click to choose images</strong> or drop them here</p>
+    <p style="margin-top:4px;font-size:0.85rem;">JPG, PNG, WEBP · up to 100 at once</p>
+  </div>
+  <input type="file" id="fileInput" accept="image/*" multiple />
+  <input type="file" id="cameraInput" accept="image/*" capture="environment" />
+  <button class="secondary-add" id="cameraBtn">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="14" r="3.5"/></svg>
+    Take a photo instead
+  </button>
+  <label class="toggle-row">
+    <input type="checkbox" id="enhanceToggle" checked>
+    Enhance images for better accuracy (grayscale + contrast, recommended)
+  </label>
+  <div class="warn" id="warnMsg" style="display:none;"></div>
+  <div class="error-banner" id="errorBanner"></div>
+
+  <div id="listSection" style="display:none;">
+    <div class="count-row">
+      <span class="label">Images</span>
+      <span class="right">
+        <span class="meta" id="countMeta">0 / 100</span>
+        <button class="clear-link" id="clearAllBtn">Clear all</button>
+      </span>
+    </div>
+    <ul class="filelist" id="fileList"></ul>
+  </div>
+
+  <div class="actions" id="actions" style="display:none;">
+    <button class="primary" id="runBtn">Extract text</button>
+    <div class="overall-track" id="overallTrack" style="display:none;"><div class="overall-fill" id="overallFill"></div></div>
+    <div class="overall-status" id="overallStatus"></div>
+  </div>
+
+  <div id="reviewSection">
+    <div class="review-head">
+      <h2>Review before you export</h2>
+      <p>Edit any page's title or text, and re-read a page if the result looks off — then export. Nothing here has been saved anywhere yet.</p>
+    </div>
+    <div id="reviewList"></div>
+    <div class="review-actions">
+      <button class="primary download" id="downloadDocxBtn">Download document.docx</button>
+      <button class="secondary" id="downloadTxtBtn">Download plain .txt</button>
+      <button class="secondary" id="resetBtn">Start a new batch</button>
+    </div>
+  </div>
+
+  <p class="note">Everything, including the text-recognition engine, is bundled with this app — nothing is fetched from anywhere else and no image ever leaves your device. Install it once and it keeps working with no connection at all.</p>
+  <p class="footer-credit">Smart Snap — a CyberHayde product</p>
+</div>
+
+<script>
+const MAX_FILES = 100;
+let files = [];
+let idCounter = 0;
+let workerPool = [];
+let running = false;
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const listSection = document.getElementById('listSection');
+const fileList = document.getElementById('fileList');
+const countMeta = document.getElementById('countMeta');
+const actions = document.getElementById('actions');
+const runBtn = document.getElementById('runBtn');
+const resetBtn = document.getElementById('resetBtn');
+const clearAllBtn = document.getElementById('clearAllBtn');
+const overallStatus = document.getElementById('overallStatus');
+const overallTrack = document.getElementById('overallTrack');
+const overallFill = document.getElementById('overallFill');
+const warnMsg = document.getElementById('warnMsg');
+const errorBanner = document.getElementById('errorBanner');
+const installBtn = document.getElementById('installBtn');
+const cameraInput = document.getElementById('cameraInput');
+const cameraBtn = document.getElementById('cameraBtn');
+const enhanceToggle = document.getElementById('enhanceToggle');
+const reviewSection = document.getElementById('reviewSection');
+const reviewList = document.getElementById('reviewList');
+const downloadDocxBtn = document.getElementById('downloadDocxBtn');
+const downloadTxtBtn = document.getElementById('downloadTxtBtn');
+
+const placeholderSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>`;
+
+// ---- PWA: service worker + install prompt ----
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  installBtn.style.display = 'inline-block';
+});
+installBtn.addEventListener('click', async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  installBtn.style.display = 'none';
+});
+window.addEventListener('appinstalled', () => { installBtn.style.display = 'none'; });
+
+// ---- File handling ----
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('drag');
+  addFiles(Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/')));
+});
+fileInput.addEventListener('change', e => {
+  addFiles(Array.from(e.target.files).filter(f => f.type.startsWith('image/')));
+  fileInput.value = '';
+});
+cameraBtn.addEventListener('click', () => { if (!running) cameraInput.click(); });
+cameraInput.addEventListener('change', e => {
+  addFiles(Array.from(e.target.files).filter(f => f.type.startsWith('image/')));
+  cameraInput.value = '';
+});
+clearAllBtn.addEventListener('click', clearAll);
+resetBtn.addEventListener('click', clearAll);
+
+function moveFile(id, dir) {
+  if (running) return;
+  const i = files.findIndex(f => f.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= files.length) return;
+  [files[i], files[j]] = [files[j], files[i]];
+  renderList();
+}
+
+function addFiles(newFiles) {
+  if (running) return;
+  warnMsg.style.display = 'none';
+  let room = MAX_FILES - files.length;
+  if (newFiles.length > room) {
+    warnMsg.textContent = `Only ${MAX_FILES} images allowed at once — added the first ${Math.max(room,0)}, dropped the rest.`;
+    warnMsg.style.display = 'block';
+  }
+  const accepted = newFiles.slice(0, room);
+  accepted.forEach(file => {
+    const record = {
+      file, id: idCounter++, thumb: null, status: 'waiting', text: '', progress: 0,
+      confidence: null, title: file.name.replace(/\.[^/.]+$/, '')
+    };
+    files.push(record);
+    makeThumb(file).then(dataUrl => { record.thumb = dataUrl; updateThumb(record); }).catch(() => {});
+  });
+  renderList();
+}
+
+function clearAll() {
+  if (running) return;
+  workerPool.forEach(w => { try { w.terminate(); } catch(e){} });
+  workerPool = [];
+  files = [];
+  warnMsg.style.display = 'none';
+  errorBanner.style.display = 'none';
+  overallTrack.style.display = 'none';
+  overallStatus.textContent = '';
+  runBtn.textContent = 'Extract text';
+  runBtn.disabled = false;
+  runBtn.onclick = runOcr;
+  actions.style.display = 'none';
+  reviewSection.style.display = 'none';
+  reviewList.innerHTML = '';
+  renderList();
+}
+
+function removeFile(id) {
+  if (running) return;
+  files = files.filter(f => f.id !== id);
+  renderList();
+}
+
+async function preprocessImage(file) {
+  const bitmap = await createImageBitmap(file);
+  let w = bitmap.width, h = bitmap.height;
+  const maxDim = 2200;
+  if (Math.max(w, h) > maxDim) {
+    const scale = maxDim / Math.max(w, h);
+    w = Math.round(w * scale); h = Math.round(h * scale);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.filter = 'grayscale(1) contrast(1.15) brightness(1.04)';
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  if (bitmap.close) bitmap.close();
+  return canvas;
+}
+
+async function makeThumb(file) {
+  try {
+    const bitmap = await createImageBitmap(file, { resizeWidth: 72, resizeHeight: 72, resizeQuality: 'low' });
+    const canvas = document.createElement('canvas');
+    canvas.width = 72; canvas.height = 72;
+    const ctx = canvas.getContext('2d');
+    const scale = Math.max(72 / bitmap.width, 72 / bitmap.height);
+    const w = bitmap.width * scale, h = bitmap.height * scale;
+    ctx.drawImage(bitmap, (72 - w) / 2, (72 - h) / 2, w, h);
+    bitmap.close && bitmap.close();
+    return canvas.toDataURL('image/jpeg', 0.7);
+  } catch (e) {
+    return null;
+  }
+}
+
+function renderList() {
+  listSection.style.display = files.length ? 'block' : 'none';
+  actions.style.display = files.length ? 'flex' : 'none';
+  countMeta.textContent = `${files.length} / ${MAX_FILES}`;
+  fileList.innerHTML = '';
+  files.forEach((f, i) => {
+    const li = document.createElement('li');
+    li.className = 'file-row';
+    li.innerHTML = `
+      <span class="file-idx">${String(i+1).padStart(3,'0')}</span>
+      <span class="reorder-col">
+        <button data-up="${f.id}" ${i === 0 ? 'disabled' : ''} title="Move up">&#9650;</button>
+        <button data-down="${f.id}" ${i === files.length - 1 ? 'disabled' : ''} title="Move down">&#9660;</button>
+      </span>
+      ${f.thumb ? `<img class="thumb" data-thumb-id="${f.id}" src="${f.thumb}" />` : `<span class="thumb placeholder" data-thumb-id="${f.id}">${placeholderSvg}</span>`}
+      <div class="file-info">
+        <div class="file-name">${escapeHtml(f.file.name)}</div>
+        <div class="file-status ${statusClass(f)}" data-status-id="${f.id}">${statusLabel(f)}</div>
+        <div class="bar-track"><div class="bar-fill" data-bar-id="${f.id}" style="width:${f.progress*100}%"></div></div>
+      </div>
+      <button class="remove-btn" data-remove="${f.id}" title="Remove">&times;</button>
+    `;
+    fileList.appendChild(li);
+  });
+  fileList.querySelectorAll('[data-remove]').forEach(btn => {
+    btn.addEventListener('click', () => removeFile(Number(btn.dataset.remove)));
+  });
+  fileList.querySelectorAll('[data-up]').forEach(btn => {
+    btn.addEventListener('click', () => moveFile(Number(btn.dataset.up), -1));
+  });
+  fileList.querySelectorAll('[data-down]').forEach(btn => {
+    btn.addEventListener('click', () => moveFile(Number(btn.dataset.down), 1));
+  });
+}
+
+function statusClass(f) { return f.status === 'done' ? 'done' : f.status === 'error' ? 'error' : ''; }
+function statusLabel(f) {
+  if (f.status === 'waiting') return 'Waiting';
+  if (f.status === 'processing') return 'Reading text…';
+  if (f.status === 'done') {
+    const conf = f.confidence != null ? ` · ${Math.round(f.confidence)}% confidence` : '';
+    return `Done · ${wordCount(f.text)} words${conf}`;
+  }
+  if (f.status === 'error') return 'Could not read this image';
+  return '';
+}
+function wordCount(t) { return (t.trim().match(/\S+/g) || []).length; }
+function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function updateThumb(f) {
+  const el = document.querySelector(`[data-thumb-id="${f.id}"]`);
+  if (el && f.thumb && el.tagName === 'IMG') el.src = f.thumb;
+  else if (el && f.thumb) {
+    const img = document.createElement('img');
+    img.className = 'thumb';
+    img.setAttribute('data-thumb-id', f.id);
+    img.src = f.thumb;
+    el.replaceWith(img);
+  }
+}
+
+function updateRow(f) {
+  const statusEl = document.querySelector(`[data-status-id="${f.id}"]`);
+  const barEl = document.querySelector(`[data-bar-id="${f.id}"]`);
+  if (statusEl) {
+    statusEl.textContent = statusLabel(f);
+    statusEl.className = 'file-status ' + statusClass(f);
+  }
+  if (barEl) {
+    if (f.status === 'processing') { barEl.classList.add('indeterminate'); barEl.style.width = ''; }
+    else { barEl.classList.remove('indeterminate'); barEl.style.width = (f.progress*100) + '%'; }
+  }
+}
+
+function updateOverall(completed, total) {
+  overallFill.style.width = (completed/total*100) + '%';
+  overallStatus.textContent = `Processed ${completed} of ${total}`;
+}
+
+runBtn.onclick = runOcr;
+
+async function runOcr() {
+  if (!files.length || running) return;
+  running = true;
+  errorBanner.style.display = 'none';
+  runBtn.disabled = true;
+  runBtn.textContent = 'Starting OCR engine…';
+  overallTrack.style.display = 'block';
+  overallFill.style.width = '0%';
+
+  const concurrency = Math.max(2, Math.min(6, navigator.hardwareConcurrency || 4, files.length));
+  overallStatus.textContent = `Loading ${concurrency} OCR workers…`;
+
+  const tessOptions = {
+    workerPath: 'assets/vendor/tesseract/worker.min.js',
+    corePath: 'assets/vendor/tesseract',
+    langPath: 'assets/vendor/tesseract/lang-data'
+  };
+
+  try {
+    workerPool = [];
+    for (let i = 0; i < concurrency; i++) {
+      const w = await Tesseract.createWorker('eng', 1, tessOptions);
+      workerPool.push(w);
+    }
+  } catch (err) {
+    showError('Could not start the OCR engine. Try reloading the page. If this keeps happening, the app files may not have installed correctly.');
+    running = false;
+    runBtn.disabled = false;
+    runBtn.textContent = 'Extract text';
+    return;
+  }
+
+  runBtn.textContent = `Reading images with ${workerPool.length} workers in parallel…`;
+  const total = files.length;
+  let completed = 0;
+  let nextIndex = 0;
+
+  const enhance = enhanceToggle.checked;
+
+  async function consume(worker) {
+    while (true) {
+      const idx = nextIndex++;
+      if (idx >= files.length) return;
+      const f = files[idx];
+      f.status = 'processing';
+      updateRow(f);
+      try {
+        const source = enhance ? await preprocessImage(f.file) : f.file;
+        const { data } = await worker.recognize(source);
+        f.text = data.text || '';
+        f.confidence = typeof data.confidence === 'number' ? data.confidence : null;
+        f.status = 'done';
+      } catch (err) {
+        f.status = 'error';
+      }
+      f.progress = 1;
+      completed++;
+      updateRow(f);
+      updateOverall(completed, total);
+    }
+  }
+
+  try {
+    await Promise.all(workerPool.map(consume));
+  } catch (err) {
+    showError('Something went wrong while reading the images. You can try again — images already read will keep their text.');
+  }
+
+  await Promise.all(workerPool.map(w => w.terminate().catch(() => {})));
+  workerPool = [];
+
+  const doneCount = files.filter(f => f.status === 'done').length;
+  const errorCount = files.filter(f => f.status === 'error').length;
+  overallStatus.textContent = errorCount
+    ? `Done — ${doneCount} read, ${errorCount} failed`
+    : `Done — ${doneCount} images read`;
+
+  running = false;
+  actions.style.display = 'none';
+  showReview();
+}
+
+function confidenceBadge(f) {
+  if (f.confidence == null) return '';
+  const low = f.confidence < 70;
+  return `<span class="review-meta confidence ${low ? 'low' : ''}">${Math.round(f.confidence)}%${low ? ' · low, please check' : ''}</span>`;
+}
+
+function showReview() {
+  reviewSection.style.display = 'block';
+  renderReview();
+  reviewSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderReview() {
+  reviewList.innerHTML = '';
+  files.forEach(f => {
+    const card = document.createElement('div');
+    card.className = 'review-card';
+    card.innerHTML = `
+      <div class="review-card-top">
+        ${f.thumb ? `<img class="review-thumb" src="${f.thumb}">` : ''}
+        <input class="review-title" data-title-id="${f.id}" value="${escapeAttr(f.title)}" ${f.status === 'error' ? 'disabled' : ''}>
+        ${confidenceBadge(f)}
+        <button class="retry-btn" data-retry="${f.id}">Re-read</button>
+      </div>
+      <textarea class="review-text" data-text-id="${f.id}" ${f.status === 'error' ? 'placeholder="This image could not be read. Try Re-read, or type the text manually."' : ''}>${escapeHtml(f.text)}</textarea>
+    `;
+    reviewList.appendChild(card);
+  });
+  reviewList.querySelectorAll('[data-title-id]').forEach(el => {
+    el.addEventListener('input', () => {
+      const f = files.find(x => x.id === Number(el.dataset.titleId));
+      if (f) f.title = el.value;
+    });
+  });
+  reviewList.querySelectorAll('[data-text-id]').forEach(el => {
+    el.addEventListener('input', () => {
+      const f = files.find(x => x.id === Number(el.dataset.textId));
+      if (f) f.text = el.value;
+    });
+  });
+  reviewList.querySelectorAll('[data-retry]').forEach(btn => {
+    btn.addEventListener('click', () => retryPage(Number(btn.dataset.retry)));
+  });
+}
+
+function escapeAttr(s) { return String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
+
+async function retryPage(id) {
+  const f = files.find(x => x.id === id);
+  if (!f || running) return;
+  const btn = reviewList.querySelector(`[data-retry="${id}"]`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Reading…'; }
+  let worker;
+  try {
+    worker = await Tesseract.createWorker('eng', 1, {
+      workerPath: 'assets/vendor/tesseract/worker.min.js',
+      corePath: 'assets/vendor/tesseract',
+      langPath: 'assets/vendor/tesseract/lang-data'
+    });
+    const source = enhanceToggle.checked ? await preprocessImage(f.file) : f.file;
+    const { data } = await worker.recognize(source);
+    f.text = data.text || '';
+    f.confidence = typeof data.confidence === 'number' ? data.confidence : null;
+    f.status = 'done';
+  } catch (err) {
+    showError(`Could not re-read "${f.title || f.file.name}". Try again, or edit the text by hand.`);
+  } finally {
+    if (worker) await worker.terminate().catch(() => {});
+    renderReview();
+  }
+}
+
+downloadDocxBtn.addEventListener('click', async () => {
+  downloadDocxBtn.disabled = true;
+  downloadDocxBtn.textContent = 'Building…';
+  try {
+    const blob = await buildDocx(files);
+    const date = new Date().toISOString().slice(0,10);
+    saveAs(blob, `smartsnap-scan-${date}.docx`);
+  } catch (err) {
+    showError('Could not assemble the Word document. Try removing any very large images and running again.');
+  }
+  downloadDocxBtn.disabled = false;
+  downloadDocxBtn.textContent = 'Download document.docx';
+});
+
+downloadTxtBtn.addEventListener('click', () => {
+  const parts = files.map(f => {
+    const title = f.title || f.file.name;
+    return `${title}\n${'-'.repeat(title.length)}\n${(f.text || '').trim() || '[No text detected on this page]'}`;
+  });
+  const blob = new Blob([parts.join('\n\n\n')], { type: 'text/plain;charset=utf-8' });
+  const date = new Date().toISOString().slice(0,10);
+  saveAs(blob, `smartsnap-scan-${date}.txt`);
+});
+
+function showError(msg) {
+  errorBanner.textContent = msg;
+  errorBanner.style.display = 'block';
+}
+
+// ---- Minimal DOCX builder (OOXML via JSZip) ----
+function escapeXml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+}
+
+function paragraphsFromText(text) {
+  const cleaned = (text || '').trim();
+  if (!cleaned) {
+    return '<w:p><w:r><w:rPr><w:i/><w:color w:val="8A8272"/></w:rPr><w:t>No text detected on this page.</w:t></w:r></w:p>';
+  }
+  const blocks = cleaned.split(/\n\s*\n/);
+  return blocks.map(block => {
+    const lines = block.split('\n').map(l => l.trim());
+    const runInner = lines.map((l, i) => (i > 0 ? '<w:br/>' : '') + `<w:t xml:space="preserve">${escapeXml(l)}</w:t>`).join('');
+    return `<w:p><w:pPr><w:spacing w:after="200"/></w:pPr><w:r>${runInner}</w:r></w:p>`;
+  }).join('');
+}
+
+async function buildDocx(items) {
+  const bodyParts = items.map((f, i) => {
+    const pageBreak = i > 0 ? '<w:p><w:r><w:br w:type="page"/></w:r></w:p>' : '';
+    const heading = `<w:p><w:pPr><w:spacing w:before="200" w:after="200"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="26"/></w:rPr><w:t xml:space="preserve">${escapeXml(f.title || f.file.name)}</w:t></w:r></w:p>`;
+    return pageBreak + heading + paragraphsFromText(f.text);
+  }).join('');
+
+  const sectPr = '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>';
+
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:body>${bodyParts}${sectPr}</w:body>
+</w:document>`;
+
+  const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`;
+
+  const relsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`;
+
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', contentTypesXml);
+  zip.folder('_rels').file('.rels', relsXml);
+  zip.folder('word').file('document.xml', documentXml);
+
+  return zip.generateAsync({
+    type: 'blob',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  });
+}
+</script>
+</body>
+</html>
